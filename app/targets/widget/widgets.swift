@@ -1,5 +1,20 @@
 import WidgetKit
 import SwiftUI
+import AppIntents
+
+// MARK: - Refresh intent
+
+// Tapping the widget runs this intent in the widget extension; reloading the timeline
+// makes UsageProvider.getTimeline fetch the latest snapshot from Supabase.
+struct RefreshUsageIntent: AppIntent {
+    static var title: LocalizedStringResource = "Refresh usage"
+    static var isDiscoverable: Bool { false }
+
+    func perform() async throws -> some IntentResult {
+        WidgetCenter.shared.reloadTimelines(ofKind: "UsageWidget")
+        return .result()
+    }
+}
 
 // MARK: - Backend model
 
@@ -193,8 +208,13 @@ struct UsageWidget: Widget {
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: UsageProvider()) { entry in
-            UsageWidgetView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
+            Button(intent: RefreshUsageIntent()) {
+                UsageWidgetView(entry: entry)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .containerBackground(.fill.tertiary, for: .widget)
         }
         .configurationDisplayName("Claude usage")
         .description("Claude usage in the active 5h window.")
