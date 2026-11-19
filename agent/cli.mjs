@@ -58,11 +58,37 @@ async function ask(question, { hidden = false, fallback = '' } = {}) {
 // ---- Pairing QR ----------------------------------------------------------------------------
 
 // The iPhone app expects {"url": "...", "key": "..."}.
+const QR_OPTIONS = { errorCorrectionLevel: 'L', margin: 4 };
+
+// Draws each module as two background-coloured spaces. Unlike half-block glyphs this does not depend on
+// the font or line spacing, and the fixed 256-colour indices (231 white, 16 black) ignore the terminal theme.
+function renderQrForTerminal(payload) {
+  const { size, data } = QRCode.create(payload, QR_OPTIONS).modules;
+  const white = '\x1b[48;5;231m';
+  const black = '\x1b[48;5;16m';
+  const reset = '\x1b[0m';
+  const { margin } = QR_OPTIONS;
+  const lines = [];
+  for (let y = -margin; y < size + margin; y++) {
+    let line = '';
+    let previous = null;
+    for (let x = -margin; x < size + margin; x++) {
+      const dark = x >= 0 && y >= 0 && x < size && y < size && data[y * size + x];
+      const color = dark ? black : white;
+      if (color !== previous) line += color;
+      previous = color;
+      line += '  ';
+    }
+    lines.push(line + reset);
+  }
+  return lines.join('\n');
+}
+
 async function printPairingQr(url, publishableKey) {
   const payload = JSON.stringify({ url, key: publishableKey });
   console.log('\nScan this in the Claude Usage app on your iPhone:\n');
-  console.log(await QRCode.toString(payload, { type: 'terminal', small: true }));
-  console.log('Or enter manually in the app:');
+  console.log(renderQrForTerminal(payload));
+  console.log('\nOr enter manually in the app:');
   console.log(`  URL:             ${url}`);
   console.log(`  Publishable key: ${publishableKey}\n`);
 }
