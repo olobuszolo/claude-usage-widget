@@ -1,4 +1,7 @@
--- Run in Supabase: SQL Editor -> New query -> paste -> Run.
+-- schema-version: 1
+-- Applied automatically by `claude-usage setup` (agent/cli.mjs). Safe to re-run: every statement is
+-- idempotent. To change the schema, bump the version above and the insert at the bottom.
+-- Manual alternative: Supabase SQL Editor -> New query -> paste -> Run.
 
 create table if not exists public.usage_snapshots (
   id            bigint generated always as identity primary key,
@@ -45,3 +48,14 @@ grant execute on function public.latest_usage() to anon, authenticated;
 
 -- Optional: clean up old rows (the agent writes every ~2 min, about 720 rows per day).
 -- delete from public.usage_snapshots where captured_at < now() - interval '14 days';
+
+-- Tracks which version of this file has been applied, so setup can skip or upgrade.
+create table if not exists public.usage_schema_version (
+  version     int         primary key,
+  applied_at  timestamptz not null default now()
+);
+alter table public.usage_schema_version enable row level security;
+insert into public.usage_schema_version (version) values (1) on conflict do nothing;
+
+-- Make PostgREST pick up the new table and function right away.
+notify pgrst, 'reload schema';

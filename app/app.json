@@ -9,7 +9,10 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.aleksanderbuszek.claudeusage",
-      "appleTeamId": "NUTTBQVL3H"
+      "appleTeamId": "NUTTBQVL3H",
+      "entitlements": {
+        "com.apple.security.application-groups": ["group.com.aleksanderbuszek.claudeusage"]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -24,7 +27,14 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "@bacons/apple-targets"
+      "@bacons/apple-targets",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Claude Usage uses the camera to scan the pairing QR code.",
+          "microphonePermission": false
+        }
+      ]
     ]
   }
 }
