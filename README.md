@@ -33,8 +33,20 @@ Other commands: `node cli.mjs qr` (show the QR again), `status` (agent, config a
 
 ### Building the iOS app
 
-In `app/`, run `npm install`, set `ios.appleTeamId` in `app.json`, then `npx expo prebuild -p ios`
-and build to your device (`export LANG=en_US.UTF-8` first, otherwise CocoaPods fails on encoding).
+In `app/`, run `npm install` and set `ios.appleTeamId` in `app.json`. Then build and install on your
+iPhone (connected by cable, unlocked, with Developer Mode on):
+
+```bash
+cd app
+LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 npx expo run:ios --device <DEVICE_UDID> --configuration Release
+```
+
+`<DEVICE_UDID>` is your iPhone's identifier; list connected devices with `xcrun xctrace list devices`
+(or leave out `--device <DEVICE_UDID>` to pick one from a menu). The command generates the native `ios/`
+project on the first run (the same as `npx expo prebuild -p ios`), builds it, and installs the app and widget.
+`--configuration Release` bundles the JavaScript into the app, so it keeps working without a dev server.
+The `LANG`/`LC_ALL` variables are needed because CocoaPods fails on encoding otherwise.
+
 The App Group (`group.com.aleksanderbuszek.claudeusage` in `app.json` and the widget target config) needs
 your Apple ID added in Xcode (Settings -> Accounts); a free Personal Team works but expires every 7 days.
 
