@@ -16,6 +16,34 @@ struct RefreshUsageIntent: AppIntent {
     }
 }
 
+// MARK: - Configuration
+
+enum Config {
+    // Shared with the app (see app.json / expo-target.config.js). The app writes the backend
+    // connection here after scanning the pairing QR code; the widget only reads it.
+    static let appGroup = "group.com.aleksanderbuszek.claudeusage"
+
+    // How soon the widget asks iOS to refresh it. This is only a request; iOS may refresh less often.
+    static let refreshInterval: TimeInterval = 5 * 60
+    // A snapshot older than this is shown as stale.
+    static let staleAfter: TimeInterval = 15 * 60
+    // Length of the usage window reported by ccusage.
+    static let windowLength: TimeInterval = 5 * 60 * 60
+
+    struct Backend {
+        let url: String
+        let key: String
+    }
+
+    // nil until the user has paired the app with their own Supabase project.
+    static var backend: Backend? {
+        let defaults = UserDefaults(suiteName: appGroup)
+        guard let url = defaults?.string(forKey: "supabaseURL"), !url.isEmpty,
+              let key = defaults?.string(forKey: "publishableKey"), !key.isEmpty else { return nil }
+        return Backend(url: url, key: key)
+    }
+}
+
 // MARK: - Backend model
 
 // One row returned by the Supabase RPC latest_usage().
@@ -44,11 +72,12 @@ enum UsageAPI {
         return plain.date(from: s)
     }
 
-    static func fetchLatest() async throws -> UsageRow? {
-        guard let url = URL(string: "\(Config.supabaseURL)/rest/v1/rpc/latest_usage") else { return nil }
+    static func fetchLatest(from backend: Config.Backend) async throws -> UsageRow? {
+        let base = backend.url.hasSuffix("/") ? String(backend.url.dropLast()) : backend.url
+        guard let url = URL(string: "\(base)/rest/v1/rpc/latest_usage") else { throw URLError(.badURL) }
         var request = URLRequest(url: url, timeoutInterval: 15)
         request.httpMethod = "POST"
-        request.setValue(Config.publishableKey, forHTTPHeaderField: "apikey")
+        request.setValue(backend.key, forHTTPHeaderField: "apikey")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = Data("{}".utf8)
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -64,6 +93,7 @@ enum UsageAPI {
 enum DataState: Equatable {
     case fresh
     case stale   // snapshot is older than Config.staleAfter
+    case notConfigured   // app has not been paired with a Supabase project yet
     case empty   // backend has no data yet
     case error(String)   // request failed, with a short description for debugging
 }
@@ -105,8 +135,11 @@ struct UsageProvider: TimelineProvider {
     }
 
     private func load() async -> UsageEntry {
+        guard let backend = Config.backend else {
+            return UsageEntry(date: .now, costUSD: 0, totalTokens: 0, fraction: 0, capturedAt: nil, state: .notConfigured)
+        }
         do {
-            guard let row = try await UsageAPI.fetchLatest() else {
+            guard let row = try await UsageAPI.fetchLatest(from: backend) else {
                 return UsageEntry(date: .now, costUSD: 0, totalTokens: 0, fraction: 0, capturedAt: nil, state: .empty)
             }
             let captured = UsageAPI.parseDate(row.captured_at)
@@ -162,6 +195,7 @@ struct StatusLine: View {
                     Text(captured, style: .relative)
                 }
             }
+        case .notConfigured: Text("open the app to set up")
         case .empty: Text("no data yet")
         case .error(let message): Text(message)
         }

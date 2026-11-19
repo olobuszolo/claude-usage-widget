@@ -9,14 +9,33 @@ laptop (launchd -> agent/send-usage.mjs -> ccusage) -> Supabase -> iPhone widget
 
 ## Setup
 
-1. **Supabase:** create a project and run `supabase/schema.sql` in the SQL Editor.
-2. **Agent:** `cp agent/.env.example agent/.env`, fill in the project URL and the secret key
-   (never commit it), then run `agent/install.sh` to schedule it every 2 minutes
-   (`agent/uninstall.sh` removes it).
-3. **Widget config:** `cp app/targets/widget/Config.swift.example app/targets/widget/Config.swift`
-   and fill in the project URL and the publishable key. `Config.swift` is gitignored.
-4. **App:** in `app/`, run `npm install`, set `ios.appleTeamId` in `app.json`, then
-   `npx expo prebuild -p ios --clean` and build to your device with Xcode
-   (`export LANG=en_US.UTF-8` first, otherwise CocoaPods fails on encoding).
+Everyone uses their own Supabase project; nothing is hardcoded.
+
+1. **Supabase:** create a free project. From its dashboard you need four values:
+   the project URL, the **secret key** and **publishable key** (Settings -> API Keys), and the
+   **Session pooler** connection string (Connect -> Session pooler; the direct host is IPv6-only on many networks).
+2. **Mac:** run the setup tool and answer the prompts.
+
+   ```bash
+   cd agent && npm install
+   node cli.mjs setup
+   ```
+
+   It creates the tables and the read-only `latest_usage()` function (safe to re-run, versioned in
+   `supabase/schema.sql`), stores the secret key in the macOS Keychain, installs a launchd job that
+   sends a snapshot every 2 minutes, and prints a **pairing QR code**.
+   The connection string is used once and never saved.
+3. **iPhone:** build the app in `app/` (see below), open it and scan the QR code. The app saves the URL and
+   publishable key to a shared App Group, and the widget reads them from there. You can also type them in.
+
+Other commands: `node cli.mjs qr` (show the QR again), `status` (agent, config and last data),
+`uninstall [--purge]` (remove the agent, and optionally the saved config and Keychain item).
+
+### Building the iOS app
+
+In `app/`, run `npm install`, set `ios.appleTeamId` in `app.json`, then `npx expo prebuild -p ios`
+and build to your device (`export LANG=en_US.UTF-8` first, otherwise CocoaPods fails on encoding).
+The App Group (`group.com.aleksanderbuszek.claudeusage` in `app.json` and the widget target config) needs
+your Apple ID added in Xcode (Settings -> Accounts); a free Personal Team works but expires every 7 days.
 
 Requires iOS 17+, Xcode, and Node 22+.
