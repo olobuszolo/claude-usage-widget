@@ -1,4 +1,4 @@
--- schema-version: 1
+-- schema-version: 2
 -- Applied automatically by `claude-usage setup` (agent/cli.mjs). Safe to re-run: every statement is
 -- idempotent. To change the schema, bump the version above and the insert at the bottom.
 -- Manual alternative: Supabase SQL Editor -> New query -> paste -> Run.
@@ -46,8 +46,27 @@ $$;
 revoke all on function public.latest_usage() from public;
 grant execute on function public.latest_usage() to anon, authenticated;
 
--- Optional: clean up old rows (the agent writes every ~2 min, about 720 rows per day).
--- delete from public.usage_snapshots where captured_at < now() - interval '14 days';
+-- Retention: the agent writes every ~2 min (about 720 rows per day). After every insert the database
+-- itself deletes snapshots older than 28 days, so no separate cleanup request is needed.
+-- Only the latest row is shown in the widget; the rest is history. To change the period, edit the interval
+-- below and bump the schema version.
+create or replace function public.prune_old_snapshots()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  delete from public.usage_snapshots
+  where captured_at < now() - interval '28 days';
+  return null;
+end;
+$$;
+
+drop trigger if exists usage_snapshots_prune on public.usage_snapshots;
+create trigger usage_snapshots_prune
+  after insert on public.usage_snapshots
+  for each statement
+  execute function public.prune_old_snapshots();
 
 -- Tracks which version of this file has been applied, so setup can skip or upgrade.
 create table if not exists public.usage_schema_version (
@@ -55,7 +74,7 @@ create table if not exists public.usage_schema_version (
   applied_at  timestamptz not null default now()
 );
 alter table public.usage_schema_version enable row level security;
-insert into public.usage_schema_version (version) values (1) on conflict do nothing;
+insert into public.usage_schema_version (version) values (1), (2) on conflict do nothing;
 
 -- Make PostgREST pick up the new table and function right away.
 notify pgrst, 'reload schema';
